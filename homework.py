@@ -11,16 +11,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-logging.basicConfig(
-    format='%(asctime)s: %(levelname)s - %(message)s - %(name)s',
-    level=logging.DEBUG,
-    filename='homework_bot.log',
-    filemode='w'
-)
-logger = logging.getLogger(__name__)
-handler = logging.StreamHandler(stream=sys.stdout)
-logger.addHandler(handler)
-
 
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -79,60 +69,47 @@ def get_api_answer(current_timestamp):
 
 def check_response(response):
     """Функция проверяет ответ API на корректность."""
+    homeworks_list = response['homeworks']
     if not isinstance(response, dict):
-        error_message = 'Не верный тип ответа API'
-        logger.error(error_message)
-        raise TypeError(error_message)
+        message = 'Ответ API представлен не в виде словаря'
+        logger.error(message)
+        raise ValueError(message)
+    if not bool(response):
+        message = 'Ответ API пришел в виде пустого словаря'
+        logger.error(message)
+        raise ValueError(message)
+    if not isinstance(homeworks_list, list):
+        message = 'Домашние задания представлены не в виде списка'
+        logger.error(message)
+        raise ValueError(message)
     if 'homeworks' not in response:
-        error_message = 'Ключ homeworks отсутствует'
-        logger.error(error_message)
-        raise KeyError(error_message)
-    homeworks = response.get('homeworks')
-    if not isinstance(homeworks, list):
-        error_message = 'homeworks не является списком'
-        logger.error(error_message)
-        raise TypeError(error_message)
-    if len(homeworks) == 0:
-        error_message = 'Пустой список домашних работ'
-        logger.error(error_message)
-        raise ValueError(error_message)
-    homework = homeworks[0]
-    return homework
+        return False
+    return homeworks_list
 
 
 def parse_status(homework):
     """Функция проверяет информацию о статусе домашней работы."""
-    if 'homework_name' not in homework:
-        error_message = 'Ключ homework_name отсутствует'
-        logger.error(error_message)
-        raise KeyError(error_message)
-    if 'status' not in homework:
-        error_message = 'Ключ status отсутствует'
-        logger.error(error_message)
-        raise KeyError(error_message)
-
-    homework_name = homework.get('homework_name')
-    homework_status = homework.get('status')
-
-    if homework_name is None or homework_status is None:
-        return 'Работа не сдана на проверку'
-    if homework_status not in HOMEWORK_STATUSES:
-        error_message = 'Неизвестный статус домашней работы'
-        logger.error(error_message)
-        raise Exception(error_message)
-
-    verdict = HOMEWORK_STATUSES.get(homework_status)
-
-    return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+    homework_name = homework['homework_name']
+    homework_status = homework['status']
+    try:
+        all((homework_name, homework_status))
+        if homework_status in HOMEWORK_STATUSES:
+            verdict = HOMEWORK_STATUSES[homework_status]
+            message = (f'Изменился статус проверки работы "{homework_name}". '
+                       f'{verdict}')
+            return message
+        message = f'Статус {homework_status} недокументирован'
+        logger.error(message)
+        raise ValueError(message)
+    except Exception:
+        message = 'Ключи "homework_name" и "status" в списке отсутствуют'
+        logger.error(message)
+        raise ValueError(message)
 
 
 def check_tokens():
     """Функция проверяет доступность переменных окружения."""
-    return not (
-        not PRACTICUM_TOKEN
-        or not TELEGRAM_TOKEN
-        or not TELEGRAM_CHAT_ID
-    )
+    return any((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
 
 
 def main():
@@ -168,4 +145,13 @@ def main():
 
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        format='%(asctime)s: %(levelname)s - %(message)s - %(name)s',
+        level=logging.DEBUG,
+        filename='homework_bot.log',
+        filemode='w'
+    )
+    logger = logging.getLogger(__name__)
+    handler = logging.StreamHandler(stream=sys.stdout)
+    logger.addHandler(handler)
     main()
