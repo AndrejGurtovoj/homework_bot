@@ -27,18 +27,26 @@ HOMEWORK_STATUSES = {
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 
+logging.basicConfig(
+    format='%(asctime)s: %(levelname)s - %(message)s - %(name)s',
+    level=logging.DEBUG,
+    filename='homework_bot.log',
+    filemode='w'
+)
+logger = logging.getLogger(__name__)
+handler = logging.StreamHandler(stream=sys.stdout)
+logger.addHandler(handler)
+
 
 def send_message(bot, message):
     """Функция отправляет сообщение в Telegram чат."""
     try:
-        logger.info('Начата отправка сообщения')
         bot.send_message(
             TELEGRAM_CHAT_ID,
             text=message)
-        logger.info(f'Сообщение {message} отправлено')
+        logging.info('Сообщение отправлено')
     except Exception as error:
-        logger.error(f'Ошибка при отправке {message} сообщения: {error}')
-        raise False
+        logger.error(f'Ошибка при отправке сообщения: {error}')
 
 
 def get_api_answer(current_timestamp):
@@ -69,42 +77,29 @@ def get_api_answer(current_timestamp):
 
 def check_response(response):
     """Функция проверяет ответ API на корректность."""
-    homeworks_list = response['homeworks']
+    homeworks = response['homeworks']
     if not isinstance(response, dict):
         message = 'Ответ API представлен не в виде словаря'
-        logger.error(message)
         raise ValueError(message)
     if not bool(response):
         message = 'Ответ API пришел в виде пустого словаря'
-        logger.error(message)
         raise ValueError(message)
-    if not isinstance(homeworks_list, list):
+    if not isinstance(homeworks, list):
         message = 'Домашние задания представлены не в виде списка'
-        logger.error(message)
         raise ValueError(message)
-    if 'homeworks' not in response:
-        return False
-    return homeworks_list
+    return homeworks
 
 
 def parse_status(homework):
     """Функция проверяет информацию о статусе домашней работы."""
     homework_name = homework['homework_name']
     homework_status = homework['status']
-    try:
-        all((homework_name, homework_status))
-        if homework_status in HOMEWORK_STATUSES:
-            verdict = HOMEWORK_STATUSES[homework_status]
-            message = (f'Изменился статус проверки работы "{homework_name}". '
-                       f'{verdict}')
-            return message
-        message = f'Статус {homework_status} недокументирован'
-        logger.error(message)
-        raise ValueError(message)
-    except Exception:
-        message = 'Ключи "homework_name" и "status" в списке отсутствуют'
-        logger.error(message)
-        raise ValueError(message)
+    verdict = HOMEWORK_STATUSES.get(homework_status)
+    if not verdict:
+        raise KeyError('Не найден статус домашки')
+    if (homework_name is None) or (homework_status is None):
+        return 'Неверный ответ сервера'
+    return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def check_tokens():
@@ -117,11 +112,10 @@ def main():
     if not check_tokens():
         error_message = 'Токены недоступны'
         logger.error(error_message)
-        raise Exception(error_message)
+        sys.exit()
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     send_message(bot, 'Бот стартовал')
     current_timestamp = int(time.time())
-    prev_error = ''
     while True:
         try:
             response = get_api_answer(current_timestamp)
@@ -134,24 +128,12 @@ def main():
                 logger.debug('Отсутствие в ответе новых статусов')
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            logger.error(message)
-            if message != prev_error:
-                if send_message(bot, message) is False:
-                    message = ('Бот остановлен с ошибкой')
-                else:
-                    prev_error = message
+            logger.critical(
+                f'Уведомление об ошибке отправлено в чат {message}'
+            )
         finally:
             time.sleep(RETRY_TIME)
 
 
 if __name__ == '__main__':
-    logging.basicConfig(
-        format='%(asctime)s: %(levelname)s - %(message)s - %(name)s',
-        level=logging.DEBUG,
-        filename='homework_bot.log',
-        filemode='w'
-    )
-    logger = logging.getLogger(__name__)
-    handler = logging.StreamHandler(stream=sys.stdout)
-    logger.addHandler(handler)
     main()
