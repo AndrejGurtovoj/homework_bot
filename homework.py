@@ -60,19 +60,15 @@ def get_api_answer(current_timestamp):
             headers=HEADERS,
             params=params
         )
-    except requests.exceptions.RequestException as error:
-        logger.error(f'Ошибка, статус запроса {error}')
-        raise Exception(error)
-    if homework_statuses.status_code != HTTPStatus.OK:
-        error_message = 'Ошибка Request'
-        logger.error(error_message)
-        raise RequestException(error_message)
-    try:
-        response = homework_statuses.json()
-    except Exception as error:
-        logger.error(f'Нет ожидаемого ответа сервера {error}')
-        raise Exception(error)
-    return response
+        logger.info('Сервер работает.')
+        if homework_statuses.status_code == HTTPStatus.OK:
+            logger.info('Ответ получен.')
+            response = homework_statuses.json()
+            return response
+        raise Exception('Ошибка состояния статуса HTTP.')
+    except RequestException as error:
+        logger.error('Ошибка ответа сервера.')
+        raise error
 
 
 def check_response(response):
