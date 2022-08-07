@@ -7,6 +7,7 @@ import time
 
 from http import HTTPStatus
 from requests import RequestException
+from exceptions import SendMessageExeptions
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -46,7 +47,7 @@ def send_message(bot, message):
             text=message)
         logging.info('Сообщение отправлено')
     except Exception as error:
-        logger.error(f'Ошибка при отправке сообщения: {error}')
+        raise SendMessageExeptions(f'Ошибка при отправке сообщения {error}')
 
 
 def get_api_answer(current_timestamp):
@@ -65,10 +66,9 @@ def get_api_answer(current_timestamp):
             logger.info('Ответ получен.')
             response = homework_statuses.json()
             return response
-        raise Exception('Ошибка состояния статуса HTTP.')
+        raise Exception(f'Код ответа при запросе к API {response.status_code}')
     except RequestException as error:
-        logger.error('Ошибка ответа сервера.')
-        raise error
+        raise SendMessageExeptions(f'Ошибка ответа сервера {error}')
 
 
 def check_response(response):
@@ -94,7 +94,7 @@ def parse_status(homework):
     if not verdict:
         raise KeyError('Не найден статус домашки')
     if (homework_name is None) or (homework_status is None):
-        return 'Неверный ответ сервера'
+        raise KeyError(f'Неизвестный статус работы {homework_status}')
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
@@ -122,6 +122,8 @@ def main():
                 send_message(bot, message)
             else:
                 logger.debug('Отсутствие в ответе новых статусов')
+        except SendMessageExeptions as error:
+            logger.debug(f'Ошибка при отправке сообщения {error}')
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logger.critical(
